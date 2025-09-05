@@ -6,7 +6,6 @@ packagerEmail: xxx@xyz.com
 license: ASL 2.0
 url: https://github.com/
 
-build_arch: amd64
 
 requires:
   - mpv
