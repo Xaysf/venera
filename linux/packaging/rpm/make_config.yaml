@@ -1,0 +1,22 @@
+display_name: venera
+icon: assets/app_icon.png
+summary: comic
+group: Applications
+packagerEmail: xxx@xyz.com
+license: ASL 2.0
+url: https://github.com/
+
+build_arch: amd64
+
+requires:
+  - mpv
+
+keywords:
+  - venera
+
+generic_name: venera
+
+categories:
+  - media
+
+startup_notify: true
