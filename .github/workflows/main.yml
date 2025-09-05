@@ -26,14 +26,7 @@ jobs:
           sudo rm -rf build/linux/arch/pkg
           sudo rm -rf build/linux/arch/src
           sudo rm -rf build/linux/arch/PKGBUILD
-      - uses: actions/upload-artifact@v4
-        with:
-          name: deb_build
-          path: build/linux/x64/release/debian
-      - uses: actions/upload-artifact@v4
-        with:
-          name: arch_build
-          path: build/linux/arch/
+
       
       - name: Build AppImage
         run: |
@@ -75,12 +68,5 @@ jobs:
           name: appimage_build
           path: build/linux/appimage
       - uses: actions/upload-artifact@v4
-        with:
-          name: deb_build
-          path: build/linux/x64/release/debian
-      - uses: actions/upload-artifact@v4
-        with:
-          name: arch_build
-          path: build/linux/arch/
   
 
