@@ -67,10 +67,6 @@ jobs:
           /usr/local/lib/venera/*
           /usr/share/applications/venera.desktop
           /usr/local/share/icons/venera.png
-
-          %changelog
-          * $(date +"%a %b %d %Y") GitHub Actions <action@github.com> - \$VERSION-1
-          - Initial RPM package
           EOF
           
           # 构建RPM包
