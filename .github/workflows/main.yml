@@ -1,138 +1,13 @@
-name: Build ALL
-run-name: Build ALL
+name: Build RPM
+run-name: Build RPM Package
 on:
   workflow_dispatch: {}
   release:
     types: [published]
 
 jobs:
-  Build_MacOS:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v3
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version-file: pubspec.yaml
-          architecture: x64
-      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
-      - run: flutter pub get
-        # Step 1: Decode and install the certificate
-      - name: Decode and install certificate
-        env:
-          CERTIFICATE: ${{ secrets.CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-        run: |
-          echo "$CERTIFICATE" | base64 --decode > signing_certificate.p12
-          security import signing_certificate.p12 -k ~/Library/Keychains/login.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-
-      - name: Check rust-toolchain.toml
-        run: rustup show
-
-      # Step 2: Build the Flutter macOS app
-      - name: Build Flutter macOS App
-        run: flutter build macos --release
-
-      # Step 3: Create the DMG file
-      - name: Create DMG
-        run: |
-          mkdir -p dist
-          mkdir -p dist/dmg_contents
-          cp -R build/macos/Build/Products/Release/venera.app dist/dmg_contents/
-          ln -s /Applications dist/dmg_contents/Applications
-          hdiutil create -volname "venera" -srcfolder dist/dmg_contents -ov -format UDZO "dist/venera.dmg"
-
-      - name: Add version to filename
-        run: |
-          APP_VERSION=$(grep "version:" pubspec.yaml | cut -d':' -f2 | tr -d ' ')
-          mkdir -p result
-          mv dist/venera.dmg result/venera-$APP_VERSION.dmg
-
-      # Step 4: Attach and upload artifacts (optional)
-      - name: Upload DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos_build
-          path: result/
-  Build_IOS:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v3
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version-file: pubspec.yaml
-          architecture: x64
-      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
-      - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
-      - run: |
-          mkdir -p /Users/runner/work/venera/venera/build/ios/iphoneos/Payload
-          mv /Users/runner/work/venera/venera/build/ios/iphoneos/Runner.app /Users/runner/work/venera/venera/build/ios/iphoneos/Payload
-          cd /Users/runner/work/venera/venera/build/ios/iphoneos/
-          zip -r venera-ios.ipa Payload
-      - name: Add version to filename
-        run: |
-          APP_VERSION=$(grep "version:" pubspec.yaml | cut -d':' -f2 | tr -d ' ')
-          mkdir -p result
-          mv build/ios/iphoneos/venera-ios.ipa result/venera-ios-$APP_VERSION.ipa
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ios_build
-          path: result/
-  Build_Android:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v3
-      - run: rm -rf /opt/hostedtoolcache
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version-file: pubspec.yaml
-          architecture: x64
-      - name: Decode and install certificate
-        env:
-          STORE_FILE: ${{ secrets.ANDROID_KEYSTORE }}
-          PROPERTY_FILE: ${{ secrets.ANDROID_KEY_PROPERTIES }}
-        run: |
-            echo "$STORE_FILE" | base64 --decode > android/keystore.jks
-            echo "$PROPERTY_FILE" > android/key.properties
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'oracle'
-          java-version: '17'
-      - name: Check rust-toolchain.toml
-        run: rustup show
-      - run: flutter pub get
-      - run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
-        with:
-          name: apks
-          path: build/app/outputs/apk/release
-  Build_Windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: install dependencies
-        run: | 
-          choco install yq -y
-          pip install httpx
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version-file: pubspec.yaml
-          architecture: x64
-      - name: build
-        run: |
-          flutter pub get
-          python windows/build.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows_build
-          path: build/windows/Venera-*
-  Build_Linux:
+  # 仅保留Linux x64的RPM构建
+  Build_Linux_RPM:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -143,89 +18,69 @@ jobs:
           architecture: x64
       - run: |
           sudo apt-get update -y
-          sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
-          dart pub global activate -s git https://github.com/venera-app/flutter_to_debian.git
-      - run: python3 debian/build.py x64
-      - run: dart run flutter_to_arch
-      - run: |
-          sudo rm -rf build/linux/arch/app.tar.gz
-          sudo rm -rf build/linux/arch/pkg
-          sudo rm -rf build/linux/arch/src
-          sudo rm -rf build/linux/arch/PKGBUILD
-      - uses: actions/upload-artifact@v4
-        with:
-          name: deb_build
-          path: build/linux/x64/release/debian
-      - uses: actions/upload-artifact@v4
-        with:
-          name: arch_build
-          path: build/linux/arch/
-  Build_Linux_ARM64:
-    runs-on: ubuntu-22.04-arm
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: 'master'
-          flutter-version-file: pubspec.yaml
-      - run: |
-          flutter pub get
-          sudo apt-get update -y
-          sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
-          dart pub global activate -s git https://github.com/venera-app/flutter_to_debian.git
-      - name: "Patch font"
+          # 安装必要依赖和RPM打包工具
+          sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1 rpm
+      - name: Build Flutter Linux app
+        run: flutter build linux --release
+      - name: Build RPM package
         run: |
-          dart run patch/font.dart
-      - run: python3 debian/build.py arm64
+          # 从pubspec提取版本号
+          APP_VERSION=$(grep "version:" pubspec.yaml | cut -d':' -f2 | tr -d ' ')
+          
+          # 创建RPM构建目录结构
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          
+          # 复制应用文件到构建目录
+          cp -r build/linux/x64/release/bundle/* ~/rpmbuild/BUILD/
+
+          cp -r debian ~/rpmbuild/BUILD/
+          sed -i '$a Exec=/usr/local/bin/venera' ~/rpmbuild/BUILD/debian/gui/venera.desktop
+          
+          # 创建SPEC文件
+          cat > ~/rpmbuild/SPECS/venera.spec << EOF
+          Name:           venera
+          Version:        $APP_VERSION
+          Release:        1%{?dist}
+          Summary:        Venera application
+          License:        GPL-3.0
+          URL:            https://github.com/venera-app/venera
+          Requires:       gtk3, webkit2gtk4.1
+          
+          %description
+          Venera application built with Flutter
+          
+          %install
+          mkdir -p \$RPM_BUILD_ROOT/usr/local/bin
+          mkdir -p \$RPM_BUILD_ROOT/usr/local/lib/venera
+          cp -r ~/rpmbuild/BUILD/* \$RPM_BUILD_ROOT/usr/local/lib/venera/
+          ln -s /usr/local/lib/venera/venera \$RPM_BUILD_ROOT/usr/local/bin/venera
+          
+          mkdir -p \$RPM_BUILD_ROOT/usr/share/applications
+          cp ~/rpmbuild/BUILD/debian/gui/venera.desktop \$RPM_BUILD_ROOT/usr/share/applications/
+          mkdir -p \$RPM_BUILD_ROOT/usr/local/share/icons
+          cp ~/rpmbuild/BUILD/debian/gui/venera.png \$RPM_BUILD_ROOT/usr/local/share/icons/
+
+
+          
+          %files
+          /usr/local/bin/venera
+          /usr/local/lib/venera/*
+          /usr/share/applications/venera.desktop
+          /usr/local/share/icons/venera.png
+
+          %changelog
+          * $(date +"%a %b %d %Y") GitHub Actions <action@github.com> - \$VERSION-1
+          - Initial RPM package
+          EOF
+          
+          # 构建RPM包
+          rpmbuild -bb ~/rpmbuild/SPECS/venera.spec
+          
+          # 整理输出文件
+          mkdir -p build/linux/rpm
+          cp ~/rpmbuild/RPMS/x86_64/*.rpm build/linux/rpm/
       - uses: actions/upload-artifact@v4
         with:
-          name: deb_arm64_build
-          path: build/linux/x64/release/debian # This is a bug related to flutter_to_debian, but it's not a big deal.
+          name: rpm_x64_build
+          path: build/linux/rpm/*.rpm
 
-  Release:
-    runs-on: ubuntu-22.04
-    needs: [Build_MacOS, Build_IOS, Build_Android, Build_Windows, Build_Linux, Build_Linux_ARM64]
-    if: github.event_name == 'release'  # 仅在 push 事件时执行
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: macos_build
-          path: outputs
-      - uses: actions/download-artifact@v4
-        with:
-          name: ios_build
-          path: outputs
-      - uses: actions/download-artifact@v4
-        with:
-          name: apks
-          path: outputs
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows_build
-          path: outputs
-      - uses: actions/download-artifact@v4
-        with:
-          name: deb_build
-          path: outputs
-      - uses: actions/download-artifact@v4
-        with:
-          name: arch_build
-          path: outputs
-      - uses: actions/download-artifact@v4
-        with:
-          name: deb_arm64_build
-          path: outputs
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            outputs/*.ipa
-            outputs/*.dmg
-            outputs/*.apk
-            outputs/*.zip
-            outputs/*.exe
-            outputs/*.deb
-            outputs/*.zst
-            outputs/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACTION_GITHUB_TOKEN }}
