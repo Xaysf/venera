@@ -67,5 +67,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: build/linux/appimage/*.AppImage
+          tag_name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
